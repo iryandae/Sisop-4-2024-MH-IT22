@@ -480,6 +480,22 @@ mkdir ree && mkdir report
 ```
 Dowload file dengan link yang dibagikan, lalu extract, sehingga terbentuk folder ```relics```
 
+Buat konfigurasi file ```archeology.c``` pada folder ```ree```.
+```shell
+#define FUSE_USE_VERSION 31
+
+#include <fuse3/fuse.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <stdbool.h>
+```
 MAX_BUFFER: Ukuran maksimum buffer untuk path file.
 MAX_SPLIT: Ukuran maksimum setiap bagian file.
 root_path: Direktori basis untuk filesystem.
