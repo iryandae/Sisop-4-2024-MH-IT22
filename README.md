@@ -54,6 +54,7 @@ int oper_mkdir(const char *path, mode_t mode) {
     return 0;
 }
 ```
+
 - fungsi `oper_readdir` akan membaca konten dari direktori dan mengisi buffer yang disediakan dengan *entry* dari direktori tersebut
 ```C++
 int oper_readdir(const char *path, void *buff, fuse_fill_dir_t fl, off_t offset, struct fuse_file_info *fileInfo){
@@ -78,6 +79,7 @@ int oper_readdir(const char *path, void *buff, fuse_fill_dir_t fl, off_t offset,
     return 0;
 }
 ```
+
 - fungsi `oper_getattr` akan mengambil informasi terkait file yang terdapat di dalam direktori
 ```C++
 int oper_getattr(const char *path, struct stat *status){
@@ -90,6 +92,7 @@ int oper_getattr(const char *path, struct stat *status){
     return 0;
 }
 ```
+
 - fungsi `oper_rename` dapat digunakan untuk mengubah nama dan/atau memindah lokasi file pada direktori. Pada fungsi ini, jika direktori tujuan memiliki prefix `/wm`, maka file akan dipindah dan sekaligus diberikan watermark
 ```C++
 int oper_rename(const char *source, const char *destination){
@@ -119,6 +122,7 @@ int oper_rename(const char *source, const char *destination){
     return 0;
 }
 ```
+
 - fungsi `oper_chmod` dapat digunakan untuk mengubah akses pada direktori fuse yang sedang dijalankan
 ```C++
 int oper_chmod(const char *path, mode_t mode){
@@ -130,6 +134,11 @@ int oper_chmod(const char *path, mode_t mode){
     return 0;
 }
 ```
+Berikut merupakan penerapan fungsi chmod
+    
+![Cuplikan layar 2024-05-25 111316](https://github.com/iryandae/Sisop-4-2024-MH-IT22/assets/121481079/9496cd26-615f-4291-886d-3f856940aad7)
+
+    
 - fungsi `oper_read` akan membaca data didalam file dan menyimpannya dalam buffer serta panjang isi file tersebut. Pada fungsi ini, jika target path memiliki prefix `/test`, maka isi file akan dibalikkan menggunakan fungsi `reverseBuffer`
 ```C++
 int oper_read(const char *path, char *buff, size_t size, off_t offset, struct fuse_file_info *fileInfo){
@@ -147,6 +156,7 @@ int oper_read(const char *path, char *buff, size_t size, off_t offset, struct fu
     return res;
 }
 ```
+
 Semua fungsi FUSE tersebut akan disimpan dalam sebuah struct seperti berikut
 ```C++
 static struct fuse_operations fuse_oper={
@@ -158,6 +168,7 @@ static struct fuse_operations fuse_oper={
     .mkdir=oper_mkdir,
 };
 ```
+
 Pada bagian terakhir, terdapat fungsi `main` yang berisi 2 line perintah. Perintah pertama merupakan perintah `umask(0)` yang digunakan untuk memungkinkan izin file diatur secara eksplisit oleh program
 ```C++
 int main(int argc, char *argv[]){
