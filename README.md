@@ -7,11 +7,11 @@
 
 ## Soal 1
 Pada soal nomor 1, untuk menggunakan fuse, diperlukan *preprocessor directive* yang mendefinisikan sebuah *macro*. Pada program saya, hal ini dapat dilihat pada *line* pertama pada file
-```C++
+```C
 #define FUSE_USE_VERSION 28
 ```
 Tentunya juga dibutuhkan header untuk menggunakan perintah pada library yang dibutuhkan
-```C++
+```C
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
@@ -23,11 +23,11 @@ Tentunya juga dibutuhkan header untuk menggunakan perintah pada library yang dib
 #include<fcntl.h>
 ```
 Selain itu saya juga membuat variabel pada luar fungsi yang akan menyimpan path utama yang akan diakses supaya memudahkan ketika saya akan menggunakan path tersebut pada setiap fungsi yang saya buat
-```C+++
+```C
 static char *dir="/home/user/modul_4/soal_1/portofolio";
 ```
 Berikutnya, terdapat beberapa fungsi yang diperlukan untuk menjalankan program sesuai arahan dari soal dan fungsi yang pertama akan saya jelaskan adalah fungsi `reverseBuffer` yang berfungsi untuk membalikkan isi buffer
-```C++
+```C
 void reverseBuffer(char *buff, int length){
     int start=0;
     int end=length-1;
@@ -44,7 +44,7 @@ Dalam fungsi tersebut, fungsi akan mengambil isi dari buffer dan panjangnya untu
 
 Pada *line* berikutnya, terdapat beberapa fungsi yang merupakan bagian dari fungsi FUSE, berikut penjelasan terkait masing-masing fungsi
 - fungsi `oper_mkdir` dapat digunakan untuk membuat file pada direktori fuse yang dijalankan
-```C++
+```C
 int oper_mkdir(const char *path, mode_t mode) {
     char fpath[1000];
     strcpy(fpath,dir);
@@ -56,7 +56,7 @@ int oper_mkdir(const char *path, mode_t mode) {
 ```
 
 - fungsi `oper_readdir` akan membaca konten dari direktori dan mengisi buffer yang disediakan dengan *entry* dari direktori tersebut
-```C++
+```C
 int oper_readdir(const char *path, void *buff, fuse_fill_dir_t fl, off_t offset, struct fuse_file_info *fileInfo){
     char fpath[100];
     strcpy(fpath,dir);
@@ -81,7 +81,7 @@ int oper_readdir(const char *path, void *buff, fuse_fill_dir_t fl, off_t offset,
 ```
 
 - fungsi `oper_getattr` akan mengambil informasi terkait file yang terdapat di dalam direktori
-```C++
+```C
 int oper_getattr(const char *path, struct stat *status){
     int res;
     char fpath[100];
@@ -94,7 +94,7 @@ int oper_getattr(const char *path, struct stat *status){
 ```
 
 - fungsi `oper_rename` dapat digunakan untuk mengubah nama dan/atau memindah lokasi file pada direktori. Pada fungsi ini, jika direktori tujuan memiliki prefix `/wm`, maka file akan dipindah dan sekaligus diberikan watermark
-```C++
+```C
 int oper_rename(const char *source, const char *destination){
     char sourcePath[100],destinationPath[100];
     strcpy(sourcePath,dir);
@@ -124,7 +124,7 @@ int oper_rename(const char *source, const char *destination){
 ```
 
 - fungsi `oper_chmod` dapat digunakan untuk mengubah akses pada direktori fuse yang sedang dijalankan
-```C++
+```C
 int oper_chmod(const char *path, mode_t mode){
     char fpath[100];
     strcpy(fpath,dir);
@@ -140,7 +140,7 @@ Berikut merupakan penerapan fungsi chmod
 
     
 - fungsi `oper_read` akan membaca data didalam file dan menyimpannya dalam buffer serta panjang isi file tersebut. Pada fungsi ini, jika target path memiliki prefix `/test`, maka isi file akan dibalikkan menggunakan fungsi `reverseBuffer`
-```C++
+```C
 int oper_read(const char *path, char *buff, size_t size, off_t offset, struct fuse_file_info *fileInfo){
     char fpath[100];
     int fd,res;
@@ -158,7 +158,7 @@ int oper_read(const char *path, char *buff, size_t size, off_t offset, struct fu
 ```
 
 Semua fungsi FUSE tersebut akan disimpan dalam sebuah struct seperti berikut
-```C++
+```C
 static struct fuse_operations fuse_oper={
     .readdir=oper_readdir,
     .getattr=oper_getattr,
@@ -170,7 +170,7 @@ static struct fuse_operations fuse_oper={
 ```
 
 Pada bagian terakhir, terdapat fungsi `main` yang berisi 2 line perintah. Perintah pertama merupakan perintah `umask(0)` yang digunakan untuk memungkinkan izin file diatur secara eksplisit oleh program
-```C++
+```C
 int main(int argc, char *argv[]){
     umask(0);
     return fuse_main(argc,argv,&fuse_oper,NULL);
@@ -178,6 +178,295 @@ int main(int argc, char *argv[]){
 ```
 Perintah `return fuse_main(argc,argv,&fuse_oper,NULL);` memanggil fungsi `fuse_main` dengan meneruskan argumen baris perintah `argc` dan `argv`, bersama dengan struktur `fuse_oper` yang menentukan operasi sistem file. Fungsi ini memulai sistem file FUSE.
 
+
+## Soal 2
+Unduh file sensitif.zip dari link yang didapat dari email
+``wget --no-check-certificate 'https://drive.google.com/uc?export=download&id=1t1CXcJgesUYj2i7KrHKdwXd79neKWF1u' -O sensitif.zip``
+
+```C
+#define FUSE_USE_VERSION 28
+#include <fuse.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <dirent.h>
+#include <errno.h>
+#include <sys/time.h>
+#include <stdint.h>
+#include <time.h>
+#include <sys/stat.h>
+```
+Deklarasikan library yang akan digunakan,definisi fuse yang digunakan.
+
+```C
+static const char encoding_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static char *decoding_table = NULL;
+static const int mod_table[] = {0, 2, 1};
+
+void build_decoding_table() {
+    decoding_table = malloc(256);
+    if (decoding_table == NULL) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+    for (int i = 0; i < 64; i++)
+        decoding_table[(unsigned char) encoding_table[i]] = i;
+}
+```
+Fungsi untuk membangun tabel decoding untuk operasi Base64.
+
+```C
+void free_decoding_table() {
+    free(decoding_table);
+    decoding_table = NULL;
+}
+```
+Fungsi untuk membebaskan memori yang dialokasikan untuk tabel decoding agar memory tidak penuh.
+
+```C
+unsigned char *base64_decode(const char *data, size_t input_length, size_t *output_length) {
+    if (decoding_table == NULL) build_decoding_table();
+    if (input_length % 4 != 0) return NULL;
+
+    *output_length = input_length / 4 * 3;
+    if (data[input_length - 1] == '=') (*output_length)--;
+    if (data[input_length - 2] == '=') (*output_length)--;
+
+    unsigned char *decoded_data = malloc(*output_length);
+    if (decoded_data == NULL) return NULL;
+
+    for (size_t i = 0, j = 0; i < input_length;) {
+        uint32_t sextet_a = data[i] == '=' ? 0 : decoding_table[(unsigned char)data[i++]];
+        uint32_t sextet_b = data[i] == '=' ? 0 : decoding_table[(unsigned char)data[i++]];
+        uint32_t sextet_c = data[i] == '=' ? 0 : decoding_table[(unsigned char)data[i++]];
+        uint32_t sextet_d = data[i] == '=' ? 0 : decoding_table[(unsigned char)data[i++]];
+
+        uint32_t triple = (sextet_a << 3 * 6) + (sextet_b << 2 * 6) + (sextet_c << 1 * 6) + (sextet_d << 0 * 6);
+
+        if (j < *output_length) decoded_data[j++] = (triple >> 2 * 8) & 0xFF;
+        if (j < *output_length) decoded_data[j++] = (triple >> 1 * 8) & 0xFF;
+        if (j < *output_length) decoded_data[j++] = (triple >> 0 * 8) & 0xFF;
+    }
+
+    return decoded_data;
+}
+```
+Fungsi untuk mendecode data dalam format base64.
+
+```C
+char rot13_char(char c) {
+    if ('a' <= c && c <= 'z') {
+        return ((c - 'a' + 13) % 26) + 'a';
+    } else if ('A' <= c && c <= 'Z') {
+        return ((c - 'A' + 13) % 26) + 'A';
+    } else {
+        return c;
+    }
+}
+```
+Fungsi untuk melakukan enkripsi dan dekripsi ROT13 untuk satu karakter.
+
+```C
+void rot13(char* str) {
+    for (size_t i = 0; str[i]; i++) {
+        str[i] = rot13_char(str[i]);
+    }
+}
+```
+Fungsi untuk melakukan enkripsi dan dekripsi ROT13 untuk seluruh string.
+
+```C
+void decode_hex(const char* hex, char* output) {
+    while (*hex) {
+        char tmp[3] = { hex[0], hex[1], '\0' };
+        *output++ = (char)strtol(tmp, NULL, 16);
+        hex += 2;
+    }
+    *output = '\0';
+}
+```
+Fungsi untuk decode data dari format heksadesimal ke format biner.
+
+```C
+void decode_rev(char* str) {
+    size_t len = strlen(str);
+    for (size_t i = 0; i < len / 2; i++) {
+        char temp = str[i];
+        str[i] = str[len - i - 1];
+        str[len - i - 1] = temp;
+    }
+}
+```
+Fungsi untuk memutar balikkan setiap string dalam file.
+
+```C
+void log_result(const char *tag, const char *info, int success) {
+    FILE *log_file = fopen("/home/satsujinki/sensitif/logs-fuse.log", "a");
+    if (log_file == NULL) {
+        return;
+    }
+
+    time_t t = time(NULL);
+    struct tm tm;
+    localtime_r(&t, &tm);
+    fprintf(log_file, "[%s]::%02d/%02d/%04d-%02d:%02d:%02d::[%s]::[%s]\n",
+            success ? "SUCCESS" : "FAILED",
+            tm.tm_mday, tm.tm_mon + 1, tm.tm_year + 1900,
+            tm.tm_hour, tm.tm_min, tm.tm_sec,
+            tag, info);
+    fclose(log_file);
+}
+```
+Fungsi untuk mencatat hasil operasi dalam sebuah file log bernama logs-fuse.log dengan format yang ditentukan.
+
+```C
+static const char *root_path = "/home/satsujinki/sensitif";
+```
+sebagai dasar pemanggilan fungsi-fungsi fuse untuk mengonstruksi path lengkap ke file atau direktori yang diminta oleh sistem operasi.
+
+```C
+static int xmp_open(const char *path, struct fuse_file_info *fi) {
+    char full_path[1024];
+    snprintf(full_path, sizeof(full_path), "%s%s", root_path, path);
+
+    if (strstr(full_path, "rahasia") != NULL) {
+        char *input_password = getpass("Enter password to access this folder: ");
+        if (!input_password) {
+            printf("Error reading password!\n");
+            return -EACCES;
+        }
+
+        if (strcmp(input_password, "bismillah") != 0) {
+            printf("Incorrect password!\n");
+            return -EACCES;
+        }
+    }
+
+    int res = open(full_path, fi->flags);
+    if (res == -1)
+        return -errno;
+
+    fi->fh = res; // Store file descriptor for later use
+    return 0;
+}
+```
+Fungsi untuk membuka file sekaligus dengan ``strstr`` membaca nama file apabila ada file yang mengandung nama ``rahasia`` akan meminta password untuk mengakses file.
+
+```C
+static int xmp_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+    int fd = fi->fh;
+    int res = pread(fd, buf, size, offset);
+    if (res == -1) {
+        res = -errno;
+    } else {
+        if (strstr(path, "rot13,") != NULL) {
+            rot13(buf);
+            log_result("readFile", "File read and decoded with ROT13", 1);
+        } else if (strstr(path, "hex,") != NULL) {
+            char *decoded_buf = malloc(size);
+            if (!decoded_buf) {
+                log_result("readFile", "Memory allocation failed", 0);
+                close(fd);
+                return -ENOMEM;
+            }
+            decode_hex(buf, decoded_buf);
+            memcpy(buf, decoded_buf, size);
+            free(decoded_buf);
+            log_result("readFile", "File read and decoded with Hex", 1);
+        } else if (strstr(path, "base64,") != NULL) {
+            size_t output_length;
+            unsigned char *decoded_data = base64_decode(buf, res, &output_length);
+            if (!decoded_data) {
+                log_result("readFile", "Base64 decode failed", 0);
+                close(fd);
+                return -EINVAL;
+            }
+            memcpy(buf, decoded_data, output_length);
+            free(decoded_data);
+            log_result("readFile", "File read and decoded with Base64", 1);
+            res = output_length;
+        } else if (strstr(path, "rev,") != NULL) {
+            decode_rev(buf);
+            log_result("readFile", "File read and decoded with Rev", 1);
+        } else {
+            log_result("readFile", "File read normally", 1);
+        }
+    }
+
+    close(fd);
+    return res;
+}
+```
+Fungsi untuk membaca isi file dan sekaligus dengan ``strstr`` membaca nama file apabila ada file yang mengandung nama ``rot13`` akan didecode dengan logika rot13,apabila ada file yang mengandung nama ``hex`` akan didecode dengan logika hex, apabila ada file yang mengandung nama ``base64`` akan didecode dengan logika base64, apabila ada file yang mengandung nama ``rev`` akan didecode dengan logika rev.
+
+```C
+static int xmp_getattr(const char *path, struct stat *stbuf) {
+    char full_path[1024];
+    snprintf(full_path, sizeof(full_path), "%s%s", root_path, path);
+
+    int res = lstat(full_path, stbuf);
+    if (res == -1)
+        return -errno;
+
+    return 0;
+}
+```
+Fungsi ini digunakan untuk mendapatkan atribut (metadata) dari sebuah file atau direktori. Ketika sistem operasi membutuhkan informasi tentang file atau direktori tertentu, fungsi ini akan dipanggil.
+
+```C
+static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+                       off_t offset, struct fuse_file_info *fi) {
+    DIR *dp;
+    struct dirent *de;
+
+    (void) offset;
+    (void) fi;
+
+    char full_path[1024];
+    snprintf(full_path, sizeof(full_path), "%s%s", root_path, path);
+
+    dp = opendir(full_path);
+    if (dp == NULL)
+        return -errno;
+
+    while ((de = readdir(dp)) != NULL) {
+        if (filler(buf, de->d_name, NULL, 0))
+            break;
+    }
+
+    closedir(dp);
+    return 0;
+}
+```
+Fungsi xmp_readdir digunakan untuk membaca isi dari sebuah direktori. Ketika sistem operasi memerlukan daftar konten dari sebuah direktori, fungsi ini akan dipanggil.
+
+```C
+static struct fuse_operations xmp_oper = {
+    .getattr = xmp_getattr,
+    .readdir = xmp_readdir,
+    .open = xmp_open,
+    .read = xmp_read,
+};
+```
+Struktur ini menyimpan pointer ke fungsi-fungsi yang akan dipanggil oleh FUSE ketika terjadi operasi tertentu pada filesystem yang di-mount.
+
+```C
+int main(int argc, char *argv[]) {
+    int ret = fuse_main(argc, argv, &xmp_oper, NULL);
+    free_decoding_table();
+    return ret;
+}
+```
+Mulai eksekusi program filesystem FUSE, menggunakan fungsi operasi yang telah ditentukan, dan kemudian membebaskan sumber daya sebelum program berakhir.
+
+
+
+revisi:
+pada kode sebelumnya saya membuat 310 line code namun saat dijalankan terminal saya tidak bisa mengeluarkan output dan untuk membuka file manager hanya loading sampai vm ditutup secara paksa, saya mencoba untuk menghilangkan beberapa fungsi yang tidak digunakan agar tidak terlalu membebani system, sudah saya coba menjadi 230 line namun saya belum berhasil memecahkan masalah ini, mungkin terlalu berat bagi VM saya yang saya set ke 4GB ram.
+
+<img width="1276" alt="Screenshot 2024-05-23 at 23 44 43" src="https://github.com/iryandae/Sisop-4-2024-MH-IT22/assets/150358232/cc71af50-b55c-4b07-97bc-6919a3aa24e0">
 
 ## Soal 3
 ```c
