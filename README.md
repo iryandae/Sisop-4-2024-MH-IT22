@@ -745,3 +745,6 @@ int main(int argc, char *argv[]) {
 1. Saat dijalankan, folder yang dituju terhapus.
 ![WhatsApp Image 2024-05-21 at 22 18 03_e529cfd9](https://github.com/iryandae/Sisop-4-2024-MH-IT22/assets/151121570/fd5010d9-1f15-4058-aa89-d169fbbc0d74)
 2. Tidak bisa unmount, padahal sebelumnya command sudah dijalankan, dan tidak ada pesan kegagalan.
+
+### Cara mengatasi
+1. Membuat VM baru.
