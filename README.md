@@ -481,7 +481,7 @@ mkdir ree && mkdir report
 Dowload file dengan link yang dibagikan, lalu extract, sehingga terbentuk folder ```relics```
 
 Buat konfigurasi file ```archeology.c``` pada folder ```ree```.
-```shell
+```c
 #define FUSE_USE_VERSION 31
 
 #include <fuse3/fuse.h>
