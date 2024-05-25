@@ -469,29 +469,34 @@ pada kode sebelumnya saya membuat 310 line code namun saat dijalankan terminal s
 <img width="1276" alt="Screenshot 2024-05-23 at 23 44 43" src="https://github.com/iryandae/Sisop-4-2024-MH-IT22/assets/150358232/cc71af50-b55c-4b07-97bc-6919a3aa24e0">
 
 ## Soal 3
+
+Setelah menginstal fuse, buat folder ```museum``` untuk mempermudah pengerjaan 
+```shell
+mkdir museum && cd museum
+```
+Selanjutnya buat folder ```[nama_bebas]``` (saya menggunakan `ree`) dan ```report```
+```shell
+mkdir ree && mkdir report
+```
+Dowload file dengan link yang dibagikan, lalu extract, sehingga terbentuk folder ```relics```
+
+MAX_BUFFER: Ukuran maksimum buffer untuk path file.
+MAX_SPLIT: Ukuran maksimum setiap bagian file.
+root_path: Direktori basis untuk filesystem.
 ```c
-#define FUSE_USE_VERSION 31
-
-#include <fuse3/fuse.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <dirent.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <stdbool.h>
-
 #define MAX_BUFFER 1024
 #define MAX_SPLIT  10000
-static const char *root_path = "/home/combrero/museum/relics";
 
+static const char *root_path = "/home/combrero/museum/relics";
+```
+Membangun path lengkap file dengan menggabungkan path yang diberikan ke direktori root.
+```c
 static void build_full_path(char *fpath, const char *path) {
     snprintf(fpath, MAX_BUFFER, "%s%s", root_path, path);
 }
-
+```
+Menghitung ukuran total dari sebuah file yang terbagi dengan menjumlahkan ukuran dari setiap bagian.
+```c
 static size_t get_total_size(const char *fpath) {
     size_t total_size = 0;
     char ppath[MAX_BUFFER + 4];
@@ -508,7 +513,10 @@ static size_t get_total_size(const char *fpath) {
     }
     return i == 1 ? 0 : total_size;
 }
-
+```
+Operasi FUSE
+Mendapatkan atribut file. Direktori dan file reguler memiliki atribut yang berbeda.
+```c
 static int arch_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi) {
     (void) fi;
     memset(stbuf, 0, sizeof(struct stat));
@@ -528,7 +536,10 @@ static int arch_getattr(const char *path, struct stat *stbuf, struct fuse_file_i
 
     return stbuf->st_size == 0 ? -ENOENT : 0;
 }
+```
 
+Membaca direktori dan mengembalikan *entries* di dalamnya.
+```c
 static int arch_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags) {
     (void) offset;
     (void) fi;
@@ -562,7 +573,10 @@ static int arch_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off
     closedir(dp);
     return 0;
 }
+```
 
+Membaca data dari file.
+```c
 static int arch_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
     (void) fi;
 
@@ -599,7 +613,10 @@ static int arch_read(const char *path, char *buf, size_t size, off_t offset, str
     }
     return total_read;
 }
+```
 
+Menulis data ke sebuah file, membuat bagian baru jika diperlukan.
+```c
 static int arch_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
     (void) fi;
 
@@ -633,7 +650,10 @@ static int arch_write(const char *path, const char *buf, size_t size, off_t offs
     }
     return total_write;
 }
+```
 
+Menghapus file dan semua bagiannya.
+```c
 static int arch_unlink(const char *path) {
     char fpath[MAX_BUFFER];
     build_full_path(fpath, path);
@@ -651,7 +671,10 @@ static int arch_unlink(const char *path) {
     }
     return 0;
 }
+```
 
+Membuat file baru.
+```c
 static int arch_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     (void) fi;
 
@@ -661,7 +684,10 @@ static int arch_create(const char *path, mode_t mode, struct fuse_file_info *fi)
     int res = creat(fpath, mode);
     return res == -1 ? -errno : (close(res), 0);
 }
+```
 
+Memotong file menjadi ukuran tertentu, menyesuaikan atau menghapus bagian-bagiannya sesuai yang dibutuhkan.
+```c
 static int arch_truncate(const char *path, off_t size, struct fuse_file_info *fi) {
     (void) fi;
 
@@ -673,6 +699,9 @@ static int arch_truncate(const char *path, off_t size, struct fuse_file_info *fi
     off_t size_rmn = size;
 
     while (size_rmn > 0) {
+        snprintf(ppath, sizeof(ppath), "%s.%03d
+
+```c
         snprintf(ppath, sizeof(ppath), "%s.%03d", fpath, pcurrent++);
         size_t part_size = size_rmn > MAX_SPLIT ? MAX_SPLIT : size_rmn;
         int res = truncate(ppath, part_size);
@@ -690,7 +719,10 @@ static int arch_truncate(const char *path, off_t size, struct fuse_file_info *fi
     }
     return 0;
 }
+```
 
+Struktur menyediakan "menu" dari operasi-operasi FUSE yang diperlukan untuk filesystem yang sudah dibuat sebelumnya.
+```c
 static struct fuse_operations arch_oper = {
     .getattr  = arch_getattr,
     .readdir  = arch_readdir,
@@ -700,7 +732,10 @@ static struct fuse_operations arch_oper = {
     .create   = arch_create,
     .truncate = arch_truncate,
 };
-
+```
+Fungsi Main
+Merupakan entry point dari program, menginisialisasi FUSE dan memasang filesystem.
+```c
 int main(int argc, char *argv[]) {
     return fuse_main(argc, argv, &arch_oper, NULL);
 }
