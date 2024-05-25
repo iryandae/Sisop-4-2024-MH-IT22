@@ -1,8 +1,8 @@
 # Sisop-4-2024-MH-IT22
 ## Anggota Kelompok
-- 5027231003  Chelsea Vania Hariyono
-- 5027231024  Furqon Aryadana
-- 5027231057  Elgracito Iryanda Endia
+- 5027231003  Chelsea Vania Hariyono (mengerjakan nomor 3)
+- 5027231024  Furqon Aryadana (mengerjakan nomor 2)
+- 5027231057  Elgracito Iryanda Endia (mengerjakan nomor 1)
 
 
 ## Soal 1
@@ -177,3 +177,242 @@ int main(int argc, char *argv[]){
 }
 ```
 Perintah `return fuse_main(argc,argv,&fuse_oper,NULL);` memanggil fungsi `fuse_main` dengan meneruskan argumen baris perintah `argc` dan `argv`, bersama dengan struktur `fuse_oper` yang menentukan operasi sistem file. Fungsi ini memulai sistem file FUSE.
+
+
+## Soal 3
+```c
+#define FUSE_USE_VERSION 31
+
+#include <fuse3/fuse.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <stdbool.h>
+
+#define MAX_BUFFER 1024
+#define MAX_SPLIT  10000
+static const char *root_path = "/home/combrero/museum/relics";
+
+static void build_full_path(char *fpath, const char *path) {
+    snprintf(fpath, MAX_BUFFER, "%s%s", root_path, path);
+}
+
+static size_t get_total_size(const char *fpath) {
+    size_t total_size = 0;
+    char ppath[MAX_BUFFER + 4];
+    FILE *fd;
+    int i = 0;
+
+    while (true) {
+        snprintf(ppath, sizeof(ppath), "%s.%03d", fpath, i++);
+        if ((fd = fopen(ppath, "rb")) == NULL) break;
+
+        fseek(fd, 0L, SEEK_END);
+        total_size += ftell(fd);
+        fclose(fd);
+    }
+    return i == 1 ? 0 : total_size;
+}
+
+static int arch_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi) {
+    (void) fi;
+    memset(stbuf, 0, sizeof(struct stat));
+
+    if (strcmp(path, "/") == 0) {
+        stbuf->st_mode = S_IFDIR | 0755;
+        stbuf->st_nlink = 2;
+        return 0;
+    }
+
+    char fpath[MAX_BUFFER];
+    build_full_path(fpath, path);
+
+    stbuf->st_mode = S_IFREG | 0644;
+    stbuf->st_nlink = 1;
+    stbuf->st_size = get_total_size(fpath);
+
+    return stbuf->st_size == 0 ? -ENOENT : 0;
+}
+
+static int arch_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi, enum fuse_readdir_flags flags) {
+    (void) offset;
+    (void) fi;
+    (void) flags;
+
+    filler(buf, ".", NULL, 0, 0);
+    filler(buf, "..", NULL, 0, 0);
+
+    char fpath[MAX_BUFFER];
+    build_full_path(fpath, path);
+
+    DIR *dp = opendir(fpath);
+    if (!dp) return -errno;
+
+    struct dirent *de;
+    while ((de = readdir(dp)) != NULL) {
+        if (!strstr(de->d_name, ".000")) continue;
+
+        struct stat st;
+        memset(&st, 0, sizeof(st));
+        st.st_ino = de->d_ino;
+        st.st_mode = de->d_type << 12;
+
+        char filename[MAX_BUFFER];
+        strncpy(filename, de->d_name, strlen(de->d_name) - 4);
+        filename[strlen(de->d_name) - 4] = '\0';
+
+        if (filler(buf, filename, &st, 0, 0)) break;
+    }
+
+    closedir(dp);
+    return 0;
+}
+
+static int arch_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+    (void) fi;
+
+    char fpath[MAX_BUFFER];
+    build_full_path(fpath, path);
+
+    char ppath[MAX_BUFFER + 4];
+    FILE *fd;
+    int i = 0;
+    size_t total_read = 0;
+
+    while (size > 0) {
+        snprintf(ppath, sizeof(ppath), "%s.%03d", fpath, i++);
+        if ((fd = fopen(ppath, "rb")) == NULL) break;
+
+        fseek(fd, 0L, SEEK_END);
+        size_t part_size = ftell(fd);
+        fseek(fd, 0L, SEEK_SET);
+
+        if (offset >= part_size) {
+            offset -= part_size;
+            fclose(fd);
+            continue;
+        }
+
+        fseek(fd, offset, SEEK_SET);
+        size_t read_size = fread(buf, 1, size, fd);
+        fclose(fd);
+
+        buf += read_size;
+        size -= read_size;
+        total_read += read_size;
+        offset = 0;
+    }
+    return total_read;
+}
+
+static int arch_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
+    (void) fi;
+
+    char fpath[MAX_BUFFER];
+    build_full_path(fpath, path);
+
+    char ppath[MAX_BUFFER + 4];
+    FILE *fd;
+    int pcurrent = offset / MAX_SPLIT;
+    size_t poffset = offset % MAX_SPLIT;
+    size_t total_write = 0;
+
+    while (size > 0) {
+        snprintf(ppath, sizeof(ppath), "%s.%03d", fpath, pcurrent++);
+        fd = fopen(ppath, "r+b");
+        if (!fd) {
+            fd = fopen(ppath, "wb");
+            if (!fd) return -errno;
+        }
+
+        fseek(fd, poffset, SEEK_SET);
+        size_t write_size = size > (MAX_SPLIT - poffset) ? (MAX_SPLIT - poffset) : size;
+
+        fwrite(buf, 1, write_size, fd);
+        fclose(fd);
+
+        buf += write_size;
+        size -= write_size;
+        total_write += write_size;
+        poffset = 0;
+    }
+    return total_write;
+}
+
+static int arch_unlink(const char *path) {
+    char fpath[MAX_BUFFER];
+    build_full_path(fpath, path);
+
+    char ppath[MAX_BUFFER + 4];
+    int pcurrent = 0;
+
+    while (true) {
+        snprintf(ppath, sizeof(ppath), "%s.%03d", fpath, pcurrent++);
+        int res = unlink(ppath);
+        if (res == -1) {
+            if (errno == ENOENT) break;
+            return -errno;
+        }
+    }
+    return 0;
+}
+
+static int arch_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
+    (void) fi;
+
+    char fpath[MAX_BUFFER];
+    snprintf(fpath, sizeof(fpath), "%s%s.000", root_path, path);
+
+    int res = creat(fpath, mode);
+    return res == -1 ? -errno : (close(res), 0);
+}
+
+static int arch_truncate(const char *path, off_t size, struct fuse_file_info *fi) {
+    (void) fi;
+
+    char fpath[MAX_BUFFER];
+    build_full_path(fpath, path);
+
+    char ppath[MAX_BUFFER + 4];
+    int pcurrent = 0;
+    off_t size_rmn = size;
+
+    while (size_rmn > 0) {
+        snprintf(ppath, sizeof(ppath), "%s.%03d", fpath, pcurrent++);
+        size_t part_size = size_rmn > MAX_SPLIT ? MAX_SPLIT : size_rmn;
+        int res = truncate(ppath, part_size);
+        if (res == -1) return -errno;
+        size_rmn -= part_size;
+    }
+
+    while (true) {
+        snprintf(ppath, sizeof(ppath), "%s.%03d", fpath, pcurrent++);
+        int res = unlink(ppath);
+        if (res == -1) {
+            if (errno == ENOENT) break;
+            return -errno;
+        }
+    }
+    return 0;
+}
+
+static struct fuse_operations arch_oper = {
+    .getattr  = arch_getattr,
+    .readdir  = arch_readdir,
+    .read     = arch_read,
+    .write    = arch_write,
+    .unlink   = arch_unlink,
+    .create   = arch_create,
+    .truncate = arch_truncate,
+};
+
+int main(int argc, char *argv[]) {
+    return fuse_main(argc, argv, &arch_oper, NULL);
+}
+```
